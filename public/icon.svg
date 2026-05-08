@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Studio Bella">
+  <rect width="128" height="128" rx="28" fill="#27211d"/>
+  <path d="M34 82c8 14 28 18 44 9 15-9 22-28 13-43-8-14-27-18-42-9-16 9-23 28-15 43Z" fill="#f0c38e"/>
+  <path d="M43 77c14 8 32 3 41-12 6-11 5-23-2-31 18 10 25 31 16 47-10 18-34 25-54 14-11-6-18-15-21-26 5 3 11 6 20 8Z" fill="#d56b4d"/>
+  <path d="M48 58h32M53 70h22" stroke="#27211d" stroke-width="8" stroke-linecap="round"/>
+</svg>

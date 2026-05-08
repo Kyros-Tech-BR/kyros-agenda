@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#8e44ad" />
+    <title>Studio Bella | App do Salao</title>
+    <link rel="manifest" href="/manifest.webmanifest?v=12" />
+    <link rel="stylesheet" href="/styles.css?v=12" />
+  </head>
+  <body>
+    <div class="phone-shell">
+      <header class="topbar">
+        <button class="top-icon" type="button" id="backButton" aria-label="Voltar">&lt;</button>
+        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v12</small></h1>
+        <button class="top-icon" type="button" id="topAction" aria-label="Adicionar">+</button>
+      </header>
+
+      <main class="screens">
+        <section class="screen active" id="agendaScreen" data-title="Agenda">
+          <div class="date-row">
+            <button type="button" class="ghost-button" id="prevDay" aria-label="Dia anterior">&lt;</button>
+            <div>
+              <strong id="prettyDate">Hoje</strong>
+              <span id="weekday">Agenda</span>
+            </div>
+            <button type="button" class="ghost-button" id="nextDay" aria-label="Proximo dia">&gt;</button>
+          </div>
+
+          <div class="summary-grid">
+            <article>
+              <strong id="todayCount">0</strong>
+              <span>agendamentos</span>
+            </article>
+            <article>
+              <strong id="revenue">R$ 0</strong>
+              <span>previsto</span>
+            </article>
+          </div>
+
+          <div id="timeline" class="timeline"></div>
+
+          <button class="fab" type="button" data-open="newScreen" aria-label="Novo agendamento">+</button>
+        </section>
+
+        <section class="screen" id="newScreen" data-title="Novo agendamento">
+          <form id="bookingForm" class="form-card">
+            <label>
+              Cliente
+              <input id="clientName" name="clientName" autocomplete="name" placeholder="Pesquisar cliente" required />
+            </label>
+            <label>
+              Telefone
+              <input id="clientPhone" name="clientPhone" autocomplete="tel" inputmode="tel" placeholder="(11) 99999-9999" />
+            </label>
+            <label>
+              Servico
+              <select id="service" name="service"></select>
+            </label>
+            <div class="split-fields">
+              <label>
+                Data
+                <input id="date" name="date" type="date" required />
+              </label>
+              <label>
+                Hora
+                <input id="time" name="time" type="time" required />
+              </label>
+            </div>
+            <label>
+              Observacao
+              <textarea id="note" name="note" rows="3" placeholder="Ex: preferencia de produto, alergia..."></textarea>
+            </label>
+            <div class="form-actions">
+              <button class="secondary-button" type="button" data-open="agendaScreen">Cancelar</button>
+              <button class="primary-button" type="submit">Salvar</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="screen" id="clientsScreen" data-title="Clientes">
+          <label class="search-box">
+            <span>Buscar cliente</span>
+            <input id="clientSearch" type="search" placeholder="Nome ou telefone" />
+          </label>
+          <div id="clientList" class="client-list"></div>
+        </section>
+
+        <section class="screen" id="detailScreen" data-title="Detalhe do cliente">
+          <div id="clientDetail" class="client-detail"></div>
+        </section>
+
+        <section class="screen" id="settingsScreen" data-title="Configuracoes">
+          <form id="businessForm" class="form-card">
+            <label>
+              Tipo de negocio
+              <select id="businessType" name="businessType">
+                <option value="beauty">Salao feminino</option>
+                <option value="barber">Barbearia</option>
+                <option value="unisex">Unissex</option>
+              </select>
+            </label>
+            <label>
+              Nome do negocio
+              <input id="businessName" name="businessName" placeholder="Nome do salao ou barbearia" />
+            </label>
+            <label>
+              WhatsApp
+              <input id="businessWhatsApp" name="businessWhatsApp" inputmode="tel" placeholder="38997257847" />
+            </label>
+            <label>
+              Logo
+              <input id="businessLogo" name="businessLogo" type="file" accept="image/*" />
+            </label>
+            <div id="logoPreview" class="logo-preview"></div>
+            <div class="template-actions">
+              <button type="button" data-template="beauty">Modelo salao</button>
+              <button type="button" data-template="barber">Modelo barbearia</button>
+              <button type="submit">Salvar perfil</button>
+            </div>
+          </form>
+          <div class="settings-group">
+            <p>Servicos</p>
+            <div id="settingsServiceList" class="settings-service-list"></div>
+            <button type="button"><span>Backup</span><strong>Local</strong></button>
+          </div>
+          <div class="settings-group">
+            <p>Horario de funcionamento</p>
+            <button type="button"><span>Terca a sabado</span><strong>08:00 - 18:00</strong></button>
+            <button type="button"><span>Segunda-feira</span><strong>Fechado</strong></button>
+            <button type="button"><span>Domingo</span><strong>Fechado</strong></button>
+          </div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Navegacao principal">
+        <button class="active" type="button" data-open="agendaScreen">
+          <span>A</span>
+          Agenda
+        </button>
+        <button type="button" data-open="clientsScreen">
+          <span>C</span>
+          Clientes
+        </button>
+        <button type="button" data-open="newScreen">
+          <span>N</span>
+          Novo
+        </button>
+        <button type="button" data-open="settingsScreen">
+          <span>M</span>
+          Mais
+        </button>
+      </nav>
+    </div>
+
+    <template id="timelineTemplate">
+      <article class="timeline-row">
+        <time></time>
+        <button type="button" class="appointment-pill"></button>
+      </article>
+    </template>
+
+    <template id="clientTemplate">
+      <button type="button" class="client-row">
+        <span class="avatar"></span>
+        <span>
+          <strong></strong>
+          <small></small>
+        </span>
+        <span class="chevron">&gt;</span>
+      </button>
+    </template>
+
+    <script src="/app.js?v=12" type="module"></script>
+  </body>
+</html>

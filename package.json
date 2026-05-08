@@ -1,0 +1,10 @@
+{
+  "name": "kyros-agenda",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kyros Agenda: PWA para saloes, barbearias e pequenos negocios.",
+  "scripts": {
+    "dev": "npx serve public",
+    "start": "npx serve public"
+  }
+}
