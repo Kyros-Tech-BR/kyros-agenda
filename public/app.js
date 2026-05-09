@@ -44,7 +44,8 @@ const hours = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "1
 const state = {
   screen: "agendaScreen",
   selectedClient: seedClients[0].phone,
-  selectedDate: todayIso()
+  selectedDate: todayIso(),
+  agendaFilter: "today"
 };
 
 const elements = {
@@ -75,6 +76,7 @@ const elements = {
   weekday: document.querySelector("#weekday"),
   prevDay: document.querySelector("#prevDay"),
   nextDay: document.querySelector("#nextDay"),
+  agendaFilterButtons: [...document.querySelectorAll("[data-agenda-filter]")],
   todayCount: document.querySelector("#todayCount"),
   revenue: document.querySelector("#revenue"),
   serviceCount: document.querySelector("#serviceCount")
@@ -109,6 +111,24 @@ function formatDate(isoDate) {
 function formatWeekday(isoDate) {
   const date = new Date(`${isoDate}T12:00:00`);
   return new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
+}
+
+function isBusinessDay(isoDate) {
+  const day = new Date(`${isoDate}T12:00:00`).getDay();
+  return day >= 2 && day <= 6;
+}
+
+function isBusinessHour(time) {
+  return time >= "08:00" && time <= "18:00";
+}
+
+function weekDates(startDate) {
+  return Array.from({ length: 7 }, (_, index) => addDays(startDate, index));
+}
+
+function activeDates() {
+  if (state.agendaFilter === "week") return weekDates(state.selectedDate);
+  return [state.selectedDate];
 }
 
 function money(value) {
@@ -197,9 +217,11 @@ function openScreen(id) {
 }
 
 function renderSummary(data) {
-  const todays = data.appointments.filter((item) => item.date === state.selectedDate && item.status !== "finished");
-  elements.prettyDate.textContent = formatDate(state.selectedDate);
-  elements.weekday.textContent = formatWeekday(state.selectedDate);
+  const dates = activeDates();
+  const todays = data.appointments.filter((item) => dates.includes(item.date) && item.status !== "finished");
+  elements.prettyDate.textContent = state.agendaFilter === "week" ? `Semana de ${formatDate(state.selectedDate)}` : formatDate(state.selectedDate);
+  elements.weekday.textContent = state.agendaFilter === "week" ? "Proximos 7 dias" : formatWeekday(state.selectedDate);
+  elements.agendaFilterButtons.forEach((button) => button.classList.toggle("active", button.dataset.agendaFilter === state.agendaFilter));
   elements.todayCount.textContent = todays.length;
   elements.revenue.textContent = money(todays.reduce((total, item) => total + serviceById(item.serviceId).price, 0));
   elements.businessType.value = data.business.type;
@@ -234,7 +256,23 @@ function renderSummary(data) {
 
 function renderTimeline(data) {
   elements.timeline.innerHTML = "";
-  const todays = data.appointments.filter((item) => item.date === state.selectedDate && item.status !== "finished");
+  if (state.agendaFilter === "week") {
+    weekDates(state.selectedDate).forEach((date) => renderDayTimeline(data, date, true));
+    return;
+  }
+
+  renderDayTimeline(data, state.selectedDate, false);
+}
+
+function renderDayTimeline(data, date, showHeader) {
+  const todays = data.appointments.filter((item) => item.date === date && item.status !== "finished");
+  if (showHeader) {
+    const header = document.createElement("h3");
+    header.className = "day-divider";
+    header.textContent = `${formatWeekday(date)} - ${formatDate(date)}`;
+    elements.timeline.appendChild(header);
+  }
+
   const visibleHours = [...new Set([...hours, ...todays.map((item) => item.time)])].sort();
 
   visibleHours.forEach((hour) => {
@@ -369,6 +407,7 @@ function setupForm() {
     .map((service) => `<option value="${service.id}">${service.name} - ${money(service.price)}</option>`)
     .join("");
   elements.date.value = todayIso();
+  elements.date.min = todayIso();
   elements.time.value = "08:00";
 }
 
@@ -477,12 +516,20 @@ function wireEvents() {
   elements.topAction.addEventListener("click", () => openScreen("newScreen"));
   elements.clientSearch.addEventListener("input", render);
   elements.prevDay.addEventListener("click", () => {
-    state.selectedDate = addDays(state.selectedDate, -1);
+    state.selectedDate = addDays(state.selectedDate, state.agendaFilter === "week" ? -7 : -1);
     render();
   });
   elements.nextDay.addEventListener("click", () => {
-    state.selectedDate = addDays(state.selectedDate, 1);
+    state.selectedDate = addDays(state.selectedDate, state.agendaFilter === "week" ? 7 : 1);
     render();
+  });
+  elements.agendaFilterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.agendaFilter = button.dataset.agendaFilter;
+      if (state.agendaFilter === "today") state.selectedDate = todayIso();
+      if (state.agendaFilter === "tomorrow") state.selectedDate = addDays(todayIso(), 1);
+      render();
+    });
   });
 
   elements.form.addEventListener("submit", (event) => {
@@ -492,14 +539,26 @@ function wireEvents() {
     const clientName = form.get("clientName").trim();
     const phone = form.get("clientPhone").trim();
     const appointmentDate = form.get("date");
+    const appointmentTime = form.get("time");
+
+    if (!isBusinessDay(appointmentDate)) {
+      window.alert("O negocio funciona de terca a sabado. Escolha uma data dentro do funcionamento.");
+      return;
+    }
+
+    if (!isBusinessHour(appointmentTime)) {
+      window.alert("O horario de funcionamento e das 08:00 as 18:00.");
+      return;
+    }
 
     upsertClient(data, clientName, phone);
     data.appointments.push(
-      appointment(clientName, phone, form.get("service"), appointmentDate, form.get("time"), "waiting", form.get("note").trim())
+      appointment(clientName, phone, form.get("service"), appointmentDate, appointmentTime, "waiting", form.get("note").trim())
     );
 
     writeData(data);
     state.selectedDate = appointmentDate;
+    state.agendaFilter = "today";
     elements.form.reset();
     setupForm();
     openScreen("agendaScreen");

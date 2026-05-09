@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#8e44ad" />
     <title>Studio Bella | App do Salao</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=12" />
-    <link rel="stylesheet" href="/styles.css?v=12" />
+    <link rel="manifest" href="/manifest.webmanifest?v=13" />
+    <link rel="stylesheet" href="/styles.css?v=13" />
   </head>
   <body>
     <div class="phone-shell">
       <header class="topbar">
         <button class="top-icon" type="button" id="backButton" aria-label="Voltar">&lt;</button>
-        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v12</small></h1>
+        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v13</small></h1>
         <button class="top-icon" type="button" id="topAction" aria-label="Adicionar">+</button>
       </header>
 
@@ -25,6 +25,11 @@
               <span id="weekday">Agenda</span>
             </div>
             <button type="button" class="ghost-button" id="nextDay" aria-label="Proximo dia">&gt;</button>
+          </div>
+          <div class="agenda-filters" aria-label="Filtros da agenda">
+            <button class="active" type="button" data-agenda-filter="today">Hoje</button>
+            <button type="button" data-agenda-filter="tomorrow">Amanha</button>
+            <button type="button" data-agenda-filter="week">Semana</button>
           </div>
 
           <div class="summary-grid">
@@ -171,6 +176,6 @@
       </button>
     </template>
 
-    <script src="/app.js?v=12" type="module"></script>
+    <script src="/app.js?v=13" type="module"></script>
   </body>
 </html>

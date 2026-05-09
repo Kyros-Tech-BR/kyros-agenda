@@ -176,6 +176,29 @@ button {
   margin-bottom: 12px;
 }
 
+.agenda-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agenda-filters button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.agenda-filters button.active {
+  border-color: var(--purple);
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
 .summary-grid article {
   flex: 1;
   min-height: 74px;
@@ -196,6 +219,12 @@ button {
 .timeline {
   display: grid;
   gap: 8px;
+}
+
+.day-divider {
+  margin: 12px 0 2px;
+  color: var(--purple-dark);
+  font-size: 0.86rem;
 }
 
 .timeline-row {
