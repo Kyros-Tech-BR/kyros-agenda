@@ -304,6 +304,8 @@ function renderDayTimeline(data, date, showHeader) {
       row.querySelector("time").textContent = hour;
       const pill = row.querySelector(".appointment-pill");
       pill.classList.add("free");
+      pill.dataset.freeDate = date;
+      pill.dataset.freeTime = hour;
       pill.textContent = "Horario livre";
       elements.timeline.appendChild(row);
     }
@@ -483,6 +485,7 @@ function wireEvents() {
     }
 
     const appointmentPill = event.target.closest(".appointment-pill[data-phone]");
+    const freePill = event.target.closest(".appointment-pill.free[data-free-date]");
     const templateButton = event.target.closest("[data-template]");
     if (templateButton) {
       applyBusinessTemplate(templateButton.dataset.template);
@@ -509,6 +512,12 @@ function wireEvents() {
     if (appointmentPill) {
       state.selectedClient = appointmentPill.dataset.phone;
       openScreen("detailScreen");
+    }
+
+    if (freePill) {
+      elements.date.value = freePill.dataset.freeDate;
+      elements.time.value = freePill.dataset.freeTime;
+      openScreen("newScreen");
     }
   });
 

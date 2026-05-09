@@ -313,6 +313,13 @@ button {
   text-align: center;
 }
 
+.appointment-pill.free::after {
+  content: "Toque para agendar";
+  color: var(--purple);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
 .fab {
   position: fixed;
   right: max(20px, calc((100vw - 430px) / 2 + 20px));
