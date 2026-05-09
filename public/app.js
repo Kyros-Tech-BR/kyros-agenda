@@ -44,6 +44,7 @@ const hours = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "1
 const state = {
   screen: "agendaScreen",
   selectedClient: seedClients[0].phone,
+  editingAppointmentId: "",
   selectedDate: todayIso(),
   agendaFilter: "today"
 };
@@ -62,6 +63,18 @@ const elements = {
   clientSearch: document.querySelector("#clientSearch"),
   clientDetail: document.querySelector("#clientDetail"),
   serviceSelect: document.querySelector("#service"),
+  editForm: document.querySelector("#editForm"),
+  editId: document.querySelector("#editId"),
+  editClientName: document.querySelector("#editClientName"),
+  editClientPhone: document.querySelector("#editClientPhone"),
+  editService: document.querySelector("#editService"),
+  editDate: document.querySelector("#editDate"),
+  editTime: document.querySelector("#editTime"),
+  editNote: document.querySelector("#editNote"),
+  editCancel: document.querySelector("#editCancel"),
+  editWhatsapp: document.querySelector("#editWhatsapp"),
+  editFinish: document.querySelector("#editFinish"),
+  editDelete: document.querySelector("#editDelete"),
   businessForm: document.querySelector("#businessForm"),
   businessType: document.querySelector("#businessType"),
   businessName: document.querySelector("#businessName"),
@@ -405,12 +418,71 @@ function updateAppointmentStatus(id, status) {
 
 function setupForm() {
   const services = readData().business.services;
-  elements.serviceSelect.innerHTML = services
+  const serviceOptions = services
     .map((service) => `<option value="${service.id}">${service.name} - ${money(service.price)}</option>`)
     .join("");
+  elements.serviceSelect.innerHTML = serviceOptions;
+  elements.editService.innerHTML = serviceOptions;
   elements.date.value = todayIso();
   elements.date.min = todayIso();
+  elements.editDate.min = todayIso();
   elements.time.value = "08:00";
+}
+
+function appointmentById(id) {
+  return readData().appointments.find((item) => item.id === id);
+}
+
+function openEditAppointment(id) {
+  const item = appointmentById(id);
+  if (!item) return;
+  state.editingAppointmentId = id;
+  elements.editId.value = item.id;
+  elements.editClientName.value = item.client;
+  elements.editClientPhone.value = item.phone;
+  elements.editService.value = item.serviceId;
+  elements.editDate.value = item.date;
+  elements.editTime.value = item.time;
+  elements.editNote.value = item.note || "";
+  openScreen("editScreen");
+}
+
+function saveEditedAppointment() {
+  const data = readData();
+  const id = elements.editId.value;
+  const appointmentDate = elements.editDate.value;
+  const appointmentTime = elements.editTime.value;
+
+  if (!isBusinessDay(appointmentDate)) {
+    window.alert("O negocio funciona de terca a sabado. Escolha uma data dentro do funcionamento.");
+    return;
+  }
+
+  if (!isBusinessHour(appointmentTime)) {
+    window.alert("O horario de funcionamento e das 08:00 as 18:00.");
+    return;
+  }
+
+  const clientName = elements.editClientName.value.trim();
+  const phone = elements.editClientPhone.value.trim();
+  data.appointments = data.appointments.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          client: clientName,
+          phone,
+          serviceId: elements.editService.value,
+          date: appointmentDate,
+          time: appointmentTime,
+          note: elements.editNote.value.trim()
+        }
+      : item
+  );
+  upsertClient(data, clientName, phone);
+  writeData(data);
+  state.selectedDate = appointmentDate;
+  state.agendaFilter = "today";
+  openScreen("agendaScreen");
 }
 
 function normalizeBusinessWhatsapp(value) {
@@ -510,8 +582,7 @@ function wireEvents() {
     }
 
     if (appointmentPill) {
-      state.selectedClient = appointmentPill.dataset.phone;
-      openScreen("detailScreen");
+      openEditAppointment(appointmentPill.dataset.id);
     }
 
     if (freePill) {
@@ -571,6 +642,30 @@ function wireEvents() {
     elements.form.reset();
     setupForm();
     openScreen("agendaScreen");
+  });
+
+  elements.editForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveEditedAppointment();
+  });
+
+  elements.editCancel.addEventListener("click", () => openScreen("agendaScreen"));
+
+  elements.editFinish.addEventListener("click", () => {
+    updateAppointmentStatus(elements.editId.value, "finished");
+    openScreen("agendaScreen");
+  });
+
+  elements.editDelete.addEventListener("click", () => {
+    updateAppointmentStatus(elements.editId.value, "canceled");
+    openScreen("agendaScreen");
+  });
+
+  elements.editWhatsapp.addEventListener("click", () => {
+    const item = appointmentById(elements.editId.value);
+    if (!item) return;
+    const businessName = readData().business.name;
+    window.open(whatsappLink(item.phone, `Ola, ${item.client}! Aqui e do ${businessName}. Podemos confirmar ou remarcar seu horario?`), "_blank", "noopener");
   });
 
   elements.businessForm.addEventListener("submit", (event) => {
