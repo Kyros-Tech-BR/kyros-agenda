@@ -49,7 +49,8 @@ const state = {
   selectedDate: todayIso(),
   agendaFilter: "today",
   cloudReady: false,
-  cloudStatus: cloudEnabled() ? "checking" : "local"
+  cloudStatus: cloudEnabled() ? "checking" : "local",
+  cloudMessage: ""
 };
 
 const elements = {
@@ -217,8 +218,13 @@ function cloudEnabled() {
   return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey && cloudBusinessId());
 }
 
-function setCloudStatus(status) {
+function errorMessage(error) {
+  return String(error?.message || error || "Erro desconhecido").replace(/^Error:\s*/i, "");
+}
+
+function setCloudStatus(status, message = "") {
   state.cloudStatus = status;
+  state.cloudMessage = message;
   renderCloudStatus();
 }
 
@@ -233,6 +239,8 @@ function renderCloudStatus() {
   };
   elements.cloudStatus.className = `cloud-status is-${state.cloudStatus}`;
   elements.cloudStatus.querySelector("strong").textContent = labels[state.cloudStatus] || labels.local;
+  elements.cloudStatus.title = state.cloudMessage;
+  elements.cloudStatus.querySelector("span").textContent = state.cloudMessage ? `Supabase - ${state.cloudMessage}` : "Supabase";
 }
 
 function clientFromCloud(client) {
@@ -269,8 +277,6 @@ async function loadBusinessFromCloud() {
     if (!id) return;
     const [business] = await supabaseGet(`businesses?id=eq.${id}&select=*`);
     const services = await supabaseGet(`services?business_id=eq.${id}&select=*&order=created_at.asc`);
-    const clients = await supabaseGet(`clients?business_id=eq.${id}&select=*&order=created_at.asc`);
-    const appointments = await supabaseGet(`appointments?business_id=eq.${id}&select=*&order=date.asc,time.asc`);
     if (!business || !services?.length) return;
 
     const data = readData();
@@ -287,12 +293,22 @@ async function loadBusinessFromCloud() {
         minutes: Number(service.minutes)
       }))
     };
-    if (clients?.length) {
-      data.clients = clients.map(clientFromCloud);
-      state.selectedClient = data.clients[0].phone;
+    try {
+      const clients = await supabaseGet(`clients?business_id=eq.${id}&select=*&order=created_at.asc`);
+      if (clients?.length) {
+        data.clients = clients.map(clientFromCloud);
+        state.selectedClient = data.clients[0].phone;
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel carregar clientes online.", error);
     }
-    if (appointments?.length) {
-      data.appointments = appointments.map(appointmentFromCloud);
+    try {
+      const appointments = await supabaseGet(`appointments?business_id=eq.${id}&select=*&order=date.asc,time.asc`);
+      if (appointments?.length) {
+        data.appointments = appointments.map(appointmentFromCloud);
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel carregar agendamentos online.", error);
     }
     writeData(data);
     state.cloudReady = true;
@@ -300,7 +316,7 @@ async function loadBusinessFromCloud() {
     setupForm();
     render();
   } catch (error) {
-    setCloudStatus(cloudEnabled() ? "error" : "local");
+    setCloudStatus(cloudEnabled() ? "error" : "local", errorMessage(error));
     console.warn("Nao foi possivel carregar dados online.", error);
   }
 }
@@ -396,7 +412,7 @@ function syncSilently(action) {
   action()
     .then(() => setCloudStatus("online"))
     .catch((error) => {
-      setCloudStatus("error");
+      setCloudStatus("error", errorMessage(error));
       console.warn("Nao foi possivel sincronizar com o Supabase.", error);
     });
 }
