@@ -39,7 +39,7 @@ const seedClients = [
   { name: "Beatriz Lima", phone: "(11) 94321-0987", initials: "BL", color: "#87909a" }
 ];
 
-const storageKey = "studio-bella-system-v2";
+const storageKey = "kyros-agenda-cloud-v1";
 const hours = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
 const state = {
@@ -308,6 +308,9 @@ async function loadBusinessFromCloud() {
       if (clients?.length) {
         data.clients = clients.map(clientFromCloud);
         state.selectedClient = data.clients[0].phone;
+      } else {
+        data.clients = [];
+        state.selectedClient = "";
       }
     } catch (error) {
       console.warn("Nao foi possivel carregar clientes online.", error);
@@ -316,6 +319,8 @@ async function loadBusinessFromCloud() {
       const appointments = await supabaseGet(`appointments?business_id=eq.${id}&select=*&order=date.asc,time.asc`);
       if (appointments?.length) {
         data.appointments = appointments.map(appointmentFromCloud);
+      } else {
+        data.appointments = [];
       }
     } catch (error) {
       console.warn("Nao foi possivel carregar agendamentos online.", error);
@@ -418,6 +423,7 @@ function syncSilently(action) {
   }
   setCloudStatus("syncing");
   action()
+    .then(() => loadBusinessFromCloud())
     .then(() => setCloudStatus("online"))
     .catch((error) => {
       setCloudStatus("error", errorMessage(error));
@@ -582,6 +588,11 @@ function renderClients(data) {
   });
 
   elements.clientList.innerHTML = "";
+  if (!clients.length) {
+    elements.clientList.innerHTML = '<p class="empty-state">Nenhum cliente cadastrado.</p>';
+    return;
+  }
+
   clients.forEach((client) => {
     const node = elements.clientTemplate.content.firstElementChild.cloneNode(true);
     node.dataset.phone = client.phone;
@@ -595,6 +606,15 @@ function renderClients(data) {
 
 function renderDetail(data) {
   const client = data.clients.find((item) => item.phone === state.selectedClient) || data.clients[0];
+  if (!client) {
+    elements.clientDetail.innerHTML = `
+      <section class="history-card empty-state">
+        <h3>Nenhum cliente selecionado</h3>
+        <span>Cadastre um cliente em um novo agendamento.</span>
+      </section>
+    `;
+    return;
+  }
   const history = data.appointments.filter((item) => item.phone === client.phone);
   const lastService = history.length ? serviceById(history[history.length - 1].serviceId).name.toLowerCase() : "um novo corte de cabelo";
   const businessName = data.business.name;
