@@ -634,6 +634,42 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.cloud-status strong::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--gray);
+}
+
+.cloud-status.is-online strong {
+  color: var(--green);
+}
+
+.cloud-status.is-online strong::before {
+  background: var(--green);
+}
+
+.cloud-status.is-syncing strong,
+.cloud-status.is-checking strong {
+  color: var(--yellow);
+}
+
+.cloud-status.is-syncing strong::before,
+.cloud-status.is-checking strong::before {
+  background: var(--yellow);
+}
+
+.cloud-status.is-error strong {
+  color: var(--pink);
+}
+
+.cloud-status.is-error strong::before {
+  background: var(--pink);
+}
+
 .bottom-nav {
   position: fixed;
   right: 0;

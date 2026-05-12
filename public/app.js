@@ -48,7 +48,8 @@ const state = {
   editingAppointmentId: "",
   selectedDate: todayIso(),
   agendaFilter: "today",
-  cloudReady: false
+  cloudReady: false,
+  cloudStatus: cloudEnabled() ? "checking" : "local"
 };
 
 const elements = {
@@ -84,6 +85,7 @@ const elements = {
   businessLogo: document.querySelector("#businessLogo"),
   logoPreview: document.querySelector("#logoPreview"),
   topLogo: document.querySelector("#topLogo"),
+  cloudStatus: document.querySelector("#cloudStatus"),
   settingsServiceList: document.querySelector("#settingsServiceList"),
   date: document.querySelector("#date"),
   time: document.querySelector("#time"),
@@ -215,6 +217,24 @@ function cloudEnabled() {
   return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey && cloudBusinessId());
 }
 
+function setCloudStatus(status) {
+  state.cloudStatus = status;
+  renderCloudStatus();
+}
+
+function renderCloudStatus() {
+  if (!elements.cloudStatus) return;
+  const labels = {
+    checking: "Conectando",
+    syncing: "Sincronizando",
+    online: "Sincronizado",
+    local: "Modo local",
+    error: "Falha ao sincronizar"
+  };
+  elements.cloudStatus.className = `cloud-status is-${state.cloudStatus}`;
+  elements.cloudStatus.querySelector("strong").textContent = labels[state.cloudStatus] || labels.local;
+}
+
 function clientFromCloud(client) {
   const name = client.name || "Cliente";
   return {
@@ -276,9 +296,11 @@ async function loadBusinessFromCloud() {
     }
     writeData(data);
     state.cloudReady = true;
+    setCloudStatus("online");
     setupForm();
     render();
   } catch (error) {
+    setCloudStatus(cloudEnabled() ? "error" : "local");
     console.warn("Nao foi possivel carregar dados online.", error);
   }
 }
@@ -366,7 +388,17 @@ async function updateServiceInCloud(service) {
 }
 
 function syncSilently(action) {
-  action().catch((error) => console.warn("Nao foi possivel sincronizar com o Supabase.", error));
+  if (!cloudEnabled()) {
+    setCloudStatus("local");
+    return;
+  }
+  setCloudStatus("syncing");
+  action()
+    .then(() => setCloudStatus("online"))
+    .catch((error) => {
+      setCloudStatus("error");
+      console.warn("Nao foi possivel sincronizar com o Supabase.", error);
+    });
 }
 
 function readData() {
@@ -600,6 +632,7 @@ function render() {
   renderTimeline(data);
   renderClients(data);
   renderDetail(data);
+  renderCloudStatus();
 }
 
 function updateAppointmentStatus(id, status) {
