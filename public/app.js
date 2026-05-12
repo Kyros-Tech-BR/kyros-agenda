@@ -29,6 +29,7 @@ const defaultBusiness = {
   logo: "",
   services: serviceTemplates.beauty
 };
+const cloudConfig = window.KYROS_CONFIG || {};
 
 const seedClients = [
   { name: "Maria Silva", phone: "(11) 98765-4321", initials: "MS", color: "#f36b8a" },
@@ -46,7 +47,8 @@ const state = {
   selectedClient: seedClients[0].phone,
   editingAppointmentId: "",
   selectedDate: todayIso(),
-  agendaFilter: "today"
+  agendaFilter: "today",
+  cloudReady: false
 };
 
 const elements = {
@@ -174,6 +176,197 @@ function initialData() {
       appointment("Carla Souza", "(11) 95432-1098", "manicure", todayIso(), "15:30", "confirmed", "")
     ]
   };
+}
+
+async function supabaseGet(path) {
+  if (!cloudConfig.supabaseUrl || !cloudConfig.supabaseAnonKey) return null;
+  const response = await fetch(`${cloudConfig.supabaseUrl}/rest/v1/${path}`, {
+    headers: {
+      apikey: cloudConfig.supabaseAnonKey,
+      Authorization: `Bearer ${cloudConfig.supabaseAnonKey}`
+    }
+  });
+  if (!response.ok) throw new Error(`Supabase ${response.status}`);
+  return response.json();
+}
+
+async function supabaseRequest(path, options = {}) {
+  if (!cloudConfig.supabaseUrl || !cloudConfig.supabaseAnonKey) return null;
+  const response = await fetch(`${cloudConfig.supabaseUrl}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: cloudConfig.supabaseAnonKey,
+      Authorization: `Bearer ${cloudConfig.supabaseAnonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...(options.headers || {})
+    }
+  });
+  if (!response.ok) throw new Error(`Supabase ${response.status}`);
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function cloudBusinessId() {
+  return cloudConfig.demoBusinessId || "";
+}
+
+function cloudEnabled() {
+  return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey && cloudBusinessId());
+}
+
+function clientFromCloud(client) {
+  const name = client.name || "Cliente";
+  return {
+    id: client.id,
+    name,
+    phone: client.phone || "",
+    initials: client.initials || initialsFromName(name),
+    color: client.color || "#8e44ad"
+  };
+}
+
+function appointmentFromCloud(item) {
+  return {
+    id: item.id,
+    client: item.client_name || item.client || "Cliente",
+    phone: item.phone || "",
+    serviceId: item.service_id,
+    date: item.date,
+    time: String(item.time || "").slice(0, 5),
+    status: item.status || "waiting",
+    note: item.note || ""
+  };
+}
+
+function serviceForCloud(serviceId) {
+  return serviceById(serviceId);
+}
+
+async function loadBusinessFromCloud() {
+  try {
+    const id = cloudBusinessId();
+    if (!id) return;
+    const [business] = await supabaseGet(`businesses?id=eq.${id}&select=*`);
+    const services = await supabaseGet(`services?business_id=eq.${id}&select=*&order=created_at.asc`);
+    const clients = await supabaseGet(`clients?business_id=eq.${id}&select=*&order=created_at.asc`);
+    const appointments = await supabaseGet(`appointments?business_id=eq.${id}&select=*&order=date.asc,time.asc`);
+    if (!business || !services?.length) return;
+
+    const data = readData();
+    data.business = {
+      ...data.business,
+      name: business.name,
+      type: business.type,
+      whatsapp: business.whatsapp || data.business.whatsapp,
+      logo: business.logo_url || data.business.logo,
+      services: services.map((service) => ({
+        id: service.id,
+        name: service.name,
+        price: Number(service.price),
+        minutes: Number(service.minutes)
+      }))
+    };
+    if (clients?.length) {
+      data.clients = clients.map(clientFromCloud);
+      state.selectedClient = data.clients[0].phone;
+    }
+    if (appointments?.length) {
+      data.appointments = appointments.map(appointmentFromCloud);
+    }
+    writeData(data);
+    state.cloudReady = true;
+    setupForm();
+    render();
+  } catch (error) {
+    console.warn("Nao foi possivel carregar dados online.", error);
+  }
+}
+
+async function saveClientToCloud(client) {
+  if (!cloudEnabled()) return;
+  const phone = encodeURIComponent(client.phone);
+  const existing = await supabaseGet(`clients?business_id=eq.${cloudBusinessId()}&phone=eq.${phone}&select=id`);
+  const body = JSON.stringify({
+    business_id: cloudBusinessId(),
+    name: client.name,
+    phone: client.phone
+  });
+
+  if (existing?.[0]?.id) {
+    await supabaseRequest(`clients?id=eq.${existing[0].id}`, { method: "PATCH", body });
+    return;
+  }
+
+  await supabaseRequest("clients", { method: "POST", body });
+}
+
+async function saveAppointmentToCloud(item) {
+  if (!cloudEnabled()) return;
+  const service = serviceForCloud(item.serviceId);
+  await supabaseRequest("appointments?on_conflict=id", {
+    method: "POST",
+    body: JSON.stringify({
+      id: item.id,
+      business_id: cloudBusinessId(),
+      client_name: item.client,
+      phone: item.phone,
+      service_id: item.serviceId,
+      service_name: service.name,
+      date: item.date,
+      time: item.time,
+      status: item.status,
+      note: item.note || ""
+    }),
+    headers: { Prefer: "resolution=merge-duplicates,return=representation" }
+  });
+}
+
+async function updateAppointmentInCloud(item) {
+  if (!cloudEnabled() || !item) return;
+  const service = serviceForCloud(item.serviceId);
+  await supabaseRequest(`appointments?id=eq.${item.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      client_name: item.client,
+      phone: item.phone,
+      service_id: item.serviceId,
+      service_name: service.name,
+      date: item.date,
+      time: item.time,
+      status: item.status,
+      note: item.note || ""
+    })
+  });
+}
+
+async function updateBusinessInCloud(business) {
+  if (!cloudEnabled()) return;
+  await supabaseRequest(`businesses?id=eq.${cloudBusinessId()}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: business.name,
+      type: business.type,
+      whatsapp: business.whatsapp,
+      logo_url: business.logo || null
+    })
+  });
+}
+
+async function updateServiceInCloud(service) {
+  if (!cloudEnabled()) return;
+  await supabaseRequest(`services?id=eq.${service.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: service.name,
+      price: service.price,
+      minutes: service.minutes
+    })
+  });
+}
+
+function syncSilently(action) {
+  action().catch((error) => console.warn("Nao foi possivel sincronizar com o Supabase.", error));
 }
 
 function readData() {
@@ -413,6 +606,7 @@ function updateAppointmentStatus(id, status) {
   const data = readData();
   data.appointments = data.appointments.map((item) => (item.id === id ? { ...item, status } : item));
   writeData(data);
+  syncSilently(() => updateAppointmentInCloud(data.appointments.find((item) => item.id === id)));
   render();
 }
 
@@ -480,6 +674,11 @@ function saveEditedAppointment() {
   );
   upsertClient(data, clientName, phone);
   writeData(data);
+  syncSilently(async () => {
+    const client = data.clients.find((item) => item.phone === phone);
+    if (client) await saveClientToCloud(client);
+    await updateAppointmentInCloud(data.appointments.find((item) => item.id === id));
+  });
   state.selectedDate = appointmentDate;
   state.agendaFilter = "today";
   openScreen("agendaScreen");
@@ -523,8 +722,19 @@ function updateService(serviceId, field, value) {
     return { ...service, name: value.trim() || service.name };
   });
   writeData(data);
+  syncSilently(() => updateServiceInCloud(data.business.services.find((service) => service.id === serviceId)));
   setupForm();
   render();
+}
+
+function initialsFromName(name) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
 
 function upsertClient(data, clientName, phone) {
@@ -535,12 +745,7 @@ function upsertClient(data, clientName, phone) {
   data.clients.push({
     name: clientName,
     phone: cleanPhone,
-    initials: clientName
-      .split(" ")
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase(),
+    initials: initialsFromName(clientName),
     color: "#8e44ad"
   });
 }
@@ -632,11 +837,15 @@ function wireEvents() {
     }
 
     upsertClient(data, clientName, phone);
-    data.appointments.push(
-      appointment(clientName, phone, form.get("service"), appointmentDate, appointmentTime, "waiting", form.get("note").trim())
-    );
+    const newAppointment = appointment(clientName, phone, form.get("service"), appointmentDate, appointmentTime, "waiting", form.get("note").trim());
+    data.appointments.push(newAppointment);
 
     writeData(data);
+    syncSilently(async () => {
+      const client = data.clients.find((item) => item.phone === (phone || "(11) 99999-9999"));
+      if (client) await saveClientToCloud(client);
+      await saveAppointmentToCloud(newAppointment);
+    });
     state.selectedDate = appointmentDate;
     state.agendaFilter = "today";
     elements.form.reset();
@@ -680,6 +889,7 @@ function wireEvents() {
       services: data.business.services?.length ? data.business.services : serviceTemplates[type]
     };
     writeData(data);
+    syncSilently(() => updateBusinessInCloud(data.business));
     setupForm();
     render();
   });
@@ -705,3 +915,4 @@ function wireEvents() {
 setupForm();
 wireEvents();
 openScreen("agendaScreen");
+loadBusinessFromCloud();
