@@ -189,8 +189,18 @@ async function supabaseGet(path) {
       Authorization: `Bearer ${cloudConfig.supabaseAnonKey}`
     }
   });
-  if (!response.ok) throw new Error(`Supabase ${response.status}`);
+  if (!response.ok) throw new Error(await supabaseError(response));
   return response.json();
+}
+
+async function supabaseError(response) {
+  const fallback = `Supabase ${response.status}`;
+  try {
+    const data = await response.json();
+    return data.message ? `${fallback}: ${data.message}` : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 async function supabaseRequest(path, options = {}) {
@@ -205,7 +215,7 @@ async function supabaseRequest(path, options = {}) {
       ...(options.headers || {})
     }
   });
-  if (!response.ok) throw new Error(`Supabase ${response.status}`);
+  if (!response.ok) throw new Error(await supabaseError(response));
   if (response.status === 204) return null;
   return response.json();
 }
@@ -348,7 +358,6 @@ async function saveAppointmentToCloud(item) {
       id: item.id,
       business_id: cloudBusinessId(),
       client_name: item.client,
-      phone: item.phone,
       service_id: item.serviceId,
       service_name: service.name,
       date: item.date,
@@ -367,7 +376,6 @@ async function updateAppointmentInCloud(item) {
     method: "PATCH",
     body: JSON.stringify({
       client_name: item.client,
-      phone: item.phone,
       service_id: item.serviceId,
       service_name: service.name,
       date: item.date,
