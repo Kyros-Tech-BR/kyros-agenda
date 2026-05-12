@@ -48,6 +48,14 @@ button {
   box-shadow: 0 0 0 1px rgba(142, 68, 173, 0.08);
 }
 
+.phone-shell.is-auth .bottom-nav {
+  display: none;
+}
+
+.phone-shell.is-auth .screens {
+  padding-bottom: 22px;
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -348,6 +356,28 @@ button {
   border-radius: 8px;
   background: var(--card);
   box-shadow: var(--shadow);
+}
+
+.auth-card {
+  margin-top: 18px;
+}
+
+.auth-card h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.auth-card p,
+.auth-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.auth-message {
+  min-height: 18px;
+  color: var(--purple-dark);
+  font-weight: 800;
 }
 
 label {

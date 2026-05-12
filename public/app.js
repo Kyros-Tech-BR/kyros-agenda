@@ -40,17 +40,21 @@ const seedClients = [
 ];
 
 const storageKey = "kyros-agenda-cloud-v1";
+const authStorageKey = "kyros-agenda-auth-v1";
 const hours = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
 const state = {
-  screen: "agendaScreen",
+  screen: "loginScreen",
   selectedClient: seedClients[0].phone,
   editingAppointmentId: "",
   selectedDate: todayIso(),
   agendaFilter: "today",
   cloudReady: false,
   cloudStatus: cloudEnabled() ? "checking" : "local",
-  cloudMessage: ""
+  cloudMessage: "",
+  businessId: cloudConfig.demoBusinessId || "",
+  authSession: readAuthSession(),
+  authMode: "demo"
 };
 
 const elements = {
@@ -87,6 +91,14 @@ const elements = {
   logoPreview: document.querySelector("#logoPreview"),
   topLogo: document.querySelector("#topLogo"),
   cloudStatus: document.querySelector("#cloudStatus"),
+  businessIdentity: document.querySelector("#businessIdentity"),
+  logoutButton: document.querySelector("#logoutButton"),
+  authForm: document.querySelector("#authForm"),
+  authEmail: document.querySelector("#authEmail"),
+  authPassword: document.querySelector("#authPassword"),
+  authSignup: document.querySelector("#authSignup"),
+  authDemo: document.querySelector("#authDemo"),
+  authMessage: document.querySelector("#authMessage"),
   settingsServiceList: document.querySelector("#settingsServiceList"),
   date: document.querySelector("#date"),
   time: document.querySelector("#time"),
@@ -168,6 +180,22 @@ function whatsappLink(phone, message) {
   return `https://wa.me/${whatsappNumber(phone)}?text=${encodeURIComponent(message)}`;
 }
 
+function readAuthSession() {
+  try {
+    return JSON.parse(localStorage.getItem(authStorageKey) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function writeAuthSession(session) {
+  if (session) {
+    localStorage.setItem(authStorageKey, JSON.stringify(session));
+  } else {
+    localStorage.removeItem(authStorageKey);
+  }
+}
+
 function initialData() {
   return {
     business: defaultBusiness,
@@ -184,10 +212,7 @@ function initialData() {
 async function supabaseGet(path) {
   if (!cloudConfig.supabaseUrl || !cloudConfig.supabaseAnonKey) return null;
   const response = await fetch(`${cloudConfig.supabaseUrl}/rest/v1/${path}`, {
-    headers: {
-      apikey: cloudConfig.supabaseAnonKey,
-      Authorization: `Bearer ${cloudConfig.supabaseAnonKey}`
-    }
+    headers: supabaseHeaders()
   });
   if (!response.ok) throw new Error(await supabaseError(response));
   return response.json();
@@ -208,8 +233,7 @@ async function supabaseRequest(path, options = {}) {
   const response = await fetch(`${cloudConfig.supabaseUrl}/rest/v1/${path}`, {
     ...options,
     headers: {
-      apikey: cloudConfig.supabaseAnonKey,
-      Authorization: `Bearer ${cloudConfig.supabaseAnonKey}`,
+      ...supabaseHeaders(),
       "Content-Type": "application/json",
       Prefer: "return=representation",
       ...(options.headers || {})
@@ -221,11 +245,84 @@ async function supabaseRequest(path, options = {}) {
 }
 
 function cloudBusinessId() {
-  return cloudConfig.demoBusinessId || "";
+  return state.businessId || cloudConfig.demoBusinessId || "";
 }
 
 function cloudEnabled() {
-  return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey && cloudBusinessId());
+  return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey);
+}
+
+function accessToken() {
+  return state.authSession?.access_token || cloudConfig.supabaseAnonKey;
+}
+
+function supabaseHeaders() {
+  return {
+    apikey: cloudConfig.supabaseAnonKey,
+    Authorization: `Bearer ${accessToken()}`
+  };
+}
+
+async function authRequest(path, body) {
+  if (!cloudConfig.supabaseUrl || !cloudConfig.supabaseAnonKey) return null;
+  const response = await fetch(`${cloudConfig.supabaseUrl}/auth/v1/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: cloudConfig.supabaseAnonKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(await supabaseError(response));
+  return response.json();
+}
+
+function setAuthMessage(message) {
+  if (elements.authMessage) elements.authMessage.textContent = message;
+}
+
+async function resolveBusinessForSession() {
+  if (!state.authSession?.user?.id) {
+    state.businessId = cloudConfig.demoBusinessId || "";
+    return;
+  }
+
+  const userId = state.authSession.user.id;
+  const links = await supabaseGet(`business_users?user_id=eq.${userId}&select=business_id,role`);
+  if (!links?.length) throw new Error("Usuario sem salao vinculado");
+  state.businessId = links[0].business_id;
+}
+
+async function signIn(email, password) {
+  const session = await authRequest("token?grant_type=password", { email, password });
+  state.authSession = session;
+  state.authMode = "user";
+  writeAuthSession(session);
+  setAuthMessage("");
+  await loadBusinessFromCloud();
+  openScreen("agendaScreen");
+}
+
+async function signUp(email, password) {
+  await authRequest("signup", { email, password });
+  setAuthMessage("Acesso criado. Se o Supabase pedir confirmacao, verifique o e-mail antes de entrar.");
+}
+
+function signOut() {
+  state.authSession = null;
+  state.authMode = "demo";
+  state.businessId = cloudConfig.demoBusinessId || "";
+  writeAuthSession(null);
+  setAuthMessage("");
+  openScreen("loginScreen");
+}
+
+function useDemoAccess() {
+  state.authMode = "demo";
+  state.businessId = cloudConfig.demoBusinessId || "";
+  setAuthMessage("");
+  loadBusinessFromCloud();
+  openScreen("agendaScreen");
 }
 
 function errorMessage(error) {
@@ -251,6 +348,9 @@ function renderCloudStatus() {
   elements.cloudStatus.querySelector("strong").textContent = labels[state.cloudStatus] || labels.local;
   elements.cloudStatus.title = state.cloudMessage;
   elements.cloudStatus.querySelector("span").textContent = state.cloudMessage ? `Supabase - ${state.cloudMessage}` : "Supabase";
+  if (elements.businessIdentity) {
+    elements.businessIdentity.textContent = state.authMode === "user" ? "Cliente Kyros" : "Demo Kyros";
+  }
 }
 
 function clientFromCloud(client) {
@@ -283,6 +383,7 @@ function serviceForCloud(serviceId) {
 
 async function loadBusinessFromCloud() {
   try {
+    await resolveBusinessForSession();
     const id = cloudBusinessId();
     if (!id) return;
     const [business] = await supabaseGet(`businesses?id=eq.${id}&select=*`);
@@ -478,9 +579,10 @@ function openScreen(id) {
 
   const screen = document.querySelector(`#${id}`);
   elements.title.textContent = screen.dataset.title;
-  elements.backButton.classList.toggle("is-hidden", id === "agendaScreen");
+  document.querySelector(".phone-shell").classList.toggle("is-auth", id === "loginScreen");
+  elements.backButton.classList.toggle("is-hidden", id === "agendaScreen" || id === "loginScreen");
   elements.topAction.textContent = id === "agendaScreen" ? "+" : " ";
-  elements.topAction.disabled = id !== "agendaScreen";
+  elements.topAction.disabled = id !== "agendaScreen" || id === "loginScreen";
   render();
 }
 
@@ -987,9 +1089,36 @@ function wireEvents() {
     render();
     elements.businessLogo.value = "";
   });
+
+  elements.authForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setAuthMessage("Entrando...");
+    try {
+      await signIn(elements.authEmail.value.trim(), elements.authPassword.value);
+    } catch (error) {
+      setAuthMessage(errorMessage(error));
+    }
+  });
+
+  elements.authSignup.addEventListener("click", async () => {
+    setAuthMessage("Criando acesso...");
+    try {
+      await signUp(elements.authEmail.value.trim(), elements.authPassword.value);
+    } catch (error) {
+      setAuthMessage(errorMessage(error));
+    }
+  });
+
+  elements.authDemo.addEventListener("click", useDemoAccess);
+  elements.logoutButton.addEventListener("click", signOut);
 }
 
 setupForm();
 wireEvents();
-openScreen("agendaScreen");
-loadBusinessFromCloud();
+if (state.authSession) {
+  state.authMode = "user";
+  openScreen("agendaScreen");
+  loadBusinessFromCloud();
+} else {
+  openScreen("loginScreen");
+}

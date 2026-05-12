@@ -5,18 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#8e44ad" />
     <title>Studio Bella | App do Salao</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=21" />
-    <link rel="stylesheet" href="/styles.css?v=21" />
+    <link rel="manifest" href="/manifest.webmanifest?v=22" />
+    <link rel="stylesheet" href="/styles.css?v=22" />
   </head>
   <body>
     <div class="phone-shell">
       <header class="topbar">
         <button class="top-icon" type="button" id="backButton" aria-label="Voltar">&lt;</button>
-        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v21</small></h1>
+        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v22</small></h1>
         <button class="top-icon" type="button" id="topAction" aria-label="Adicionar">+</button>
       </header>
 
       <main class="screens">
+        <section class="screen" id="loginScreen" data-title="Acesso Kyros">
+          <form id="authForm" class="form-card auth-card">
+            <h2>Entrar no salão</h2>
+            <p>Acesse a área do cliente Kyros com o e-mail cadastrado para este salão.</p>
+            <label>
+              E-mail
+              <input id="authEmail" name="email" type="email" autocomplete="email" placeholder="cliente@salao.com.br" required />
+            </label>
+            <label>
+              Senha
+              <input id="authPassword" name="password" type="password" autocomplete="current-password" placeholder="Senha de acesso" required />
+            </label>
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Entrar</button>
+              <button class="secondary-button" type="button" id="authDemo">Usar demo</button>
+            </div>
+            <button class="outline-button" type="button" id="authSignup">Criar acesso teste</button>
+            <span id="authMessage" class="auth-message"></span>
+          </form>
+        </section>
+
         <section class="screen active" id="agendaScreen" data-title="Agenda">
           <div class="date-row">
             <button type="button" class="ghost-button" id="prevDay" aria-label="Dia anterior">&lt;</button>
@@ -176,7 +197,8 @@
               <span>Supabase</span>
               <strong>Conectando</strong>
             </button>
-            <button type="button"><span>Identificacao</span><strong>Demo Kyros</strong></button>
+            <button type="button"><span>Identificacao</span><strong id="businessIdentity">Demo Kyros</strong></button>
+            <button type="button" id="logoutButton"><span>Acesso</span><strong>Sair</strong></button>
           </div>
           <div class="settings-group">
             <p>Horario de funcionamento</p>
@@ -225,7 +247,7 @@
       </button>
     </template>
 
-    <script src="/config.js?v=21"></script>
-    <script src="/app.js?v=21" type="module"></script>
+    <script src="/config.js?v=22"></script>
+    <script src="/app.js?v=22" type="module"></script>
   </body>
 </html>
