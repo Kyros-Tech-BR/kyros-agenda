@@ -97,7 +97,7 @@ const elements = {
   authEmail: document.querySelector("#authEmail"),
   authPassword: document.querySelector("#authPassword"),
   authSignup: document.querySelector("#authSignup"),
-  authDemo: document.querySelector("#authDemo"),
+  authClear: document.querySelector("#authClear"),
   authMessage: document.querySelector("#authMessage"),
   settingsServiceList: document.querySelector("#settingsServiceList"),
   date: document.querySelector("#date"),
@@ -315,14 +315,6 @@ function signOut() {
   writeAuthSession(null);
   setAuthMessage("");
   openScreen("loginScreen");
-}
-
-function useDemoAccess() {
-  state.authMode = "demo";
-  state.businessId = cloudConfig.demoBusinessId || "";
-  setAuthMessage("");
-  loadBusinessFromCloud();
-  openScreen("agendaScreen");
 }
 
 function errorMessage(error) {
@@ -1109,7 +1101,10 @@ function wireEvents() {
     }
   });
 
-  elements.authDemo.addEventListener("click", useDemoAccess);
+  elements.authClear.addEventListener("click", () => {
+    elements.authForm.reset();
+    setAuthMessage("");
+  });
   elements.logoutButton.addEventListener("click", signOut);
 }
 
