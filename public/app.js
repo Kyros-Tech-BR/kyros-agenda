@@ -356,11 +356,13 @@ function clientFromCloud(client) {
   };
 }
 
-function appointmentFromCloud(item) {
+function appointmentFromCloud(item, clientsById = new Map()) {
+  const linkedClient = clientsById.get(item.client_id);
   return {
     id: item.id,
-    client: item.client_name || item.client || "Cliente",
-    phone: item.phone || "",
+    clientId: item.client_id || "",
+    client: linkedClient?.name || item.client_name || item.client || "Cliente",
+    phone: linkedClient?.phone || item.phone || "",
     serviceId: item.service_id,
     date: item.date,
     time: String(item.time || "").slice(0, 5),
@@ -383,6 +385,7 @@ async function loadBusinessFromCloud() {
     if (!business || !services?.length) return;
 
     const data = readData();
+    let clientsById = new Map();
     data.business = {
       ...data.business,
       name: business.name,
@@ -400,6 +403,7 @@ async function loadBusinessFromCloud() {
       const clients = await supabaseGet(`clients?business_id=eq.${id}&select=*&order=created_at.asc`);
       if (clients?.length) {
         data.clients = clients.map(clientFromCloud);
+        clientsById = new Map(data.clients.map((client) => [client.id, client]));
         state.selectedClient = data.clients[0].phone;
       } else {
         data.clients = [];
@@ -411,7 +415,7 @@ async function loadBusinessFromCloud() {
     try {
       const appointments = await supabaseGet(`appointments?business_id=eq.${id}&select=*&order=date.asc,time.asc`);
       if (appointments?.length) {
-        data.appointments = appointments.map(appointmentFromCloud);
+        data.appointments = appointments.map((item) => appointmentFromCloud(item, clientsById));
       } else {
         data.appointments = [];
       }
@@ -432,7 +436,7 @@ async function loadBusinessFromCloud() {
 async function saveClientToCloud(client) {
   if (!cloudEnabled()) return;
   const phone = encodeURIComponent(client.phone);
-  const existing = await supabaseGet(`clients?business_id=eq.${cloudBusinessId()}&phone=eq.${phone}&select=id`);
+  const existing = await supabaseGet(`clients?business_id=eq.${cloudBusinessId()}&phone=eq.${phone}&select=id,name,phone,initials,color`);
   const body = JSON.stringify({
     business_id: cloudBusinessId(),
     name: client.name,
@@ -440,29 +444,32 @@ async function saveClientToCloud(client) {
   });
 
   if (existing?.[0]?.id) {
-    await supabaseRequest(`clients?id=eq.${existing[0].id}`, { method: "PATCH", body });
-    return;
+    const updated = await supabaseRequest(`clients?id=eq.${existing[0].id}`, { method: "PATCH", body });
+    return clientFromCloud(updated?.[0] || { ...client, id: existing[0].id });
   }
 
-  await supabaseRequest("clients", { method: "POST", body });
+  const created = await supabaseRequest("clients", { method: "POST", body });
+  return clientFromCloud(created?.[0] || client);
 }
 
 async function saveAppointmentToCloud(item) {
   if (!cloudEnabled()) return;
   const service = serviceForCloud(item.serviceId);
+  const body = {
+    id: item.id,
+    business_id: cloudBusinessId(),
+    client_id: item.clientId || null,
+    client_name: item.client,
+    service_id: item.serviceId,
+    service_name: service.name,
+    date: item.date,
+    time: item.time,
+    status: item.status,
+    note: item.note || ""
+  };
   await supabaseRequest("appointments?on_conflict=id", {
     method: "POST",
-    body: JSON.stringify({
-      id: item.id,
-      business_id: cloudBusinessId(),
-      client_name: item.client,
-      service_id: item.serviceId,
-      service_name: service.name,
-      date: item.date,
-      time: item.time,
-      status: item.status,
-      note: item.note || ""
-    }),
+    body: JSON.stringify(body),
     headers: { Prefer: "resolution=merge-duplicates,return=representation" }
   });
 }
@@ -470,17 +477,19 @@ async function saveAppointmentToCloud(item) {
 async function updateAppointmentInCloud(item) {
   if (!cloudEnabled() || !item) return;
   const service = serviceForCloud(item.serviceId);
+  const body = {
+    client_id: item.clientId || null,
+    client_name: item.client,
+    service_id: item.serviceId,
+    service_name: service.name,
+    date: item.date,
+    time: item.time,
+    status: item.status,
+    note: item.note || ""
+  };
   await supabaseRequest(`appointments?id=eq.${item.id}`, {
     method: "PATCH",
-    body: JSON.stringify({
-      client_name: item.client,
-      service_id: item.serviceId,
-      service_name: service.name,
-      date: item.date,
-      time: item.time,
-      status: item.status,
-      note: item.note || ""
-    })
+    body: JSON.stringify(body)
   });
 }
 
@@ -546,9 +555,10 @@ function writeData(data) {
   localStorage.setItem(storageKey, JSON.stringify(data));
 }
 
-function appointment(client, phone, serviceId, date, time, status, note) {
+function appointment(client, phone, serviceId, date, time, status, note, clientId = "") {
   return {
     id: uuid(),
+    clientId,
     client,
     phone,
     serviceId,
@@ -689,6 +699,7 @@ function renderClients(data) {
 
   clients.forEach((client) => {
     const node = elements.clientTemplate.content.firstElementChild.cloneNode(true);
+    node.dataset.clientId = client.id || "";
     node.dataset.phone = client.phone;
     node.querySelector(".avatar").textContent = client.initials;
     node.querySelector(".avatar").style.background = client.color;
@@ -699,7 +710,7 @@ function renderClients(data) {
 }
 
 function renderDetail(data) {
-  const client = data.clients.find((item) => item.phone === state.selectedClient) || data.clients[0];
+  const client = data.clients.find((item) => item.id === state.selectedClient || item.phone === state.selectedClient) || data.clients[0];
   if (!client) {
     elements.clientDetail.innerHTML = `
       <section class="history-card empty-state">
@@ -709,7 +720,7 @@ function renderDetail(data) {
     `;
     return;
   }
-  const history = data.appointments.filter((item) => item.phone === client.phone);
+  const history = data.appointments.filter((item) => item.clientId === client.id || item.phone === client.phone);
   const lastService = history.length ? serviceById(history[history.length - 1].serviceId).name.toLowerCase() : "um novo corte de cabelo";
   const businessName = data.business.name;
   const messages = [
@@ -830,10 +841,12 @@ function saveEditedAppointment() {
 
   const clientName = elements.editClientName.value.trim();
   const phone = elements.editClientPhone.value.trim();
+  const localClient = upsertClient(data, clientName, phone);
   data.appointments = data.appointments.map((item) =>
     item.id === id
       ? {
           ...item,
+          clientId: localClient.id || item.clientId || "",
           client: clientName,
           phone,
           serviceId: elements.editService.value,
@@ -843,12 +856,12 @@ function saveEditedAppointment() {
         }
       : item
   );
-  upsertClient(data, clientName, phone);
   writeData(data);
   syncSilently(async () => {
-    const client = data.clients.find((item) => item.phone === phone);
-    if (client) await saveClientToCloud(client);
-    await updateAppointmentInCloud(data.appointments.find((item) => item.id === id));
+    const savedClient = await saveClientToCloud(localClient);
+    const updatedAppointment = data.appointments.find((item) => item.id === id);
+    if (updatedAppointment && savedClient?.id) updatedAppointment.clientId = savedClient.id;
+    await updateAppointmentInCloud(updatedAppointment);
   });
   state.selectedDate = appointmentDate;
   state.agendaFilter = "today";
@@ -910,15 +923,22 @@ function initialsFromName(name) {
 
 function upsertClient(data, clientName, phone) {
   const cleanPhone = phone || "(11) 99999-9999";
-  const exists = data.clients.some((client) => client.phone === cleanPhone);
-  if (exists) return;
+  const existing = data.clients.find((client) => client.phone === cleanPhone);
+  if (existing) {
+    existing.name = clientName;
+    existing.initials = initialsFromName(clientName);
+    return existing;
+  }
 
-  data.clients.push({
+  const client = {
+    id: "",
     name: clientName,
     phone: cleanPhone,
     initials: initialsFromName(clientName),
     color: "#8e44ad"
-  });
+  };
+  data.clients.push(client);
+  return client;
 }
 
 function wireEvents() {
@@ -928,7 +948,7 @@ function wireEvents() {
 
     const clientRow = event.target.closest(".client-row");
     if (clientRow) {
-      state.selectedClient = clientRow.dataset.phone;
+      state.selectedClient = clientRow.dataset.clientId || clientRow.dataset.phone;
       openScreen("detailScreen");
     }
 
@@ -1007,14 +1027,14 @@ function wireEvents() {
       return;
     }
 
-    upsertClient(data, clientName, phone);
-    const newAppointment = appointment(clientName, phone, form.get("service"), appointmentDate, appointmentTime, "waiting", form.get("note").trim());
+    const localClient = upsertClient(data, clientName, phone);
+    const newAppointment = appointment(clientName, phone, form.get("service"), appointmentDate, appointmentTime, "waiting", form.get("note").trim(), localClient.id || "");
     data.appointments.push(newAppointment);
 
     writeData(data);
     syncSilently(async () => {
-      const client = data.clients.find((item) => item.phone === (phone || "(11) 99999-9999"));
-      if (client) await saveClientToCloud(client);
+      const savedClient = await saveClientToCloud(localClient);
+      if (savedClient?.id) newAppointment.clientId = savedClient.id;
       await saveAppointmentToCloud(newAppointment);
     });
     state.selectedDate = appointmentDate;
