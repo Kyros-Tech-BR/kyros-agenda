@@ -70,6 +70,11 @@ const elements = {
   clientList: document.querySelector("#clientList"),
   clientSearch: document.querySelector("#clientSearch"),
   clientDetail: document.querySelector("#clientDetail"),
+  clientForm: document.querySelector("#clientForm"),
+  clientId: document.querySelector("#clientId"),
+  clientFormName: document.querySelector("#clientFormName"),
+  clientFormPhone: document.querySelector("#clientFormPhone"),
+  clientFormCancel: document.querySelector("#clientFormCancel"),
   serviceSelect: document.querySelector("#service"),
   editForm: document.querySelector("#editForm"),
   editId: document.querySelector("#editId"),
@@ -402,9 +407,11 @@ async function loadBusinessFromCloud() {
     try {
       const clients = await supabaseGet(`clients?business_id=eq.${id}&select=*&order=created_at.asc`);
       if (clients?.length) {
+        const selectedBeforeLoad = state.selectedClient;
         data.clients = clients.map(clientFromCloud);
         clientsById = new Map(data.clients.map((client) => [client.id, client]));
-        state.selectedClient = data.clients[0].phone;
+        const selectedStillExists = data.clients.find((client) => client.id === selectedBeforeLoad || client.phone === selectedBeforeLoad);
+        state.selectedClient = selectedStillExists?.id || selectedStillExists?.phone || data.clients[0].id || data.clients[0].phone;
       } else {
         data.clients = [];
         state.selectedClient = "";
@@ -450,6 +457,18 @@ async function saveClientToCloud(client) {
 
   const created = await supabaseRequest("clients", { method: "POST", body });
   return clientFromCloud(created?.[0] || client);
+}
+
+async function updateClientInCloud(client) {
+  if (!cloudEnabled() || !client?.id) return saveClientToCloud(client);
+  const updated = await supabaseRequest(`clients?id=eq.${client.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: client.name,
+      phone: client.phone
+    })
+  });
+  return clientFromCloud(updated?.[0] || client);
 }
 
 async function saveAppointmentToCloud(item) {
@@ -583,8 +602,8 @@ function openScreen(id) {
   elements.title.textContent = screen.dataset.title;
   document.querySelector(".phone-shell").classList.toggle("is-auth", id === "loginScreen");
   elements.backButton.classList.toggle("is-hidden", id === "agendaScreen" || id === "loginScreen");
-  elements.topAction.textContent = id === "agendaScreen" ? "+" : " ";
-  elements.topAction.disabled = id !== "agendaScreen" || id === "loginScreen";
+  elements.topAction.textContent = id === "agendaScreen" || id === "clientsScreen" ? "+" : " ";
+  elements.topAction.disabled = !["agendaScreen", "clientsScreen"].includes(id) || id === "loginScreen";
   render();
 }
 
@@ -743,6 +762,7 @@ function renderDetail(data) {
       <h2>${client.name}</h2>
       <p>${client.phone}</p>
       <a class="whatsapp-button" href="${whatsappLink(client.phone, messages[2].text)}" target="_blank" rel="noopener">Chamar no WhatsApp</a>
+      <button type="button" class="secondary-button" data-action="edit-client" data-client-id="${client.id}" data-phone="${client.phone}">Editar cliente</button>
       <button type="button" class="outline-button" data-open="newScreen">Novo agendamento</button>
     </section>
     <section class="history-card">
@@ -803,6 +823,17 @@ function setupForm() {
   elements.date.min = todayIso();
   elements.editDate.min = todayIso();
   elements.time.value = "08:00";
+}
+
+function clientByIdentity(identity) {
+  return readData().clients.find((client) => client.id === identity || client.phone === identity);
+}
+
+function openClientForm(client = null) {
+  elements.clientId.value = client?.id || "";
+  elements.clientFormName.value = client?.name || "";
+  elements.clientFormPhone.value = client?.phone || "";
+  openScreen("clientFormScreen");
 }
 
 function appointmentById(id) {
@@ -944,7 +975,16 @@ function upsertClient(data, clientName, phone) {
 function wireEvents() {
   document.body.addEventListener("click", (event) => {
     const openButton = event.target.closest("[data-open]");
-    if (openButton) openScreen(openButton.dataset.open);
+    if (openButton) {
+      if (openButton.dataset.open === "newScreen" && state.screen === "detailScreen") {
+        const client = clientByIdentity(state.selectedClient);
+        if (client) {
+          document.querySelector("#clientName").value = client.name;
+          document.querySelector("#clientPhone").value = client.phone;
+        }
+      }
+      openScreen(openButton.dataset.open);
+    }
 
     const clientRow = event.target.closest(".client-row");
     if (clientRow) {
@@ -970,6 +1010,11 @@ function wireEvents() {
         render();
         return;
       }
+      if (action.dataset.action === "edit-client") {
+        const client = clientByIdentity(action.dataset.clientId || action.dataset.phone);
+        openClientForm(client);
+        return;
+      }
       const pill = action.closest(".appointment-pill");
       if (action.dataset.action === "confirm") updateAppointmentStatus(pill.dataset.id, "confirmed");
       if (action.dataset.action === "finish") updateAppointmentStatus(pill.dataset.id, "finished");
@@ -989,7 +1034,13 @@ function wireEvents() {
   });
 
   elements.backButton.addEventListener("click", () => openScreen("agendaScreen"));
-  elements.topAction.addEventListener("click", () => openScreen("newScreen"));
+  elements.topAction.addEventListener("click", () => {
+    if (state.screen === "clientsScreen") {
+      openClientForm();
+      return;
+    }
+    openScreen("newScreen");
+  });
   elements.clientSearch.addEventListener("input", render);
   elements.prevDay.addEventListener("click", () => {
     state.selectedDate = addDays(state.selectedDate, state.agendaFilter === "week" ? -7 : -1);
@@ -1043,6 +1094,30 @@ function wireEvents() {
     setupForm();
     openScreen("agendaScreen");
   });
+
+  elements.clientForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = readData();
+    const clientId = elements.clientId.value;
+    const clientName = elements.clientFormName.value.trim();
+    const phone = elements.clientFormPhone.value.trim();
+    const existing = data.clients.find((client) => client.id === clientId);
+    const client = existing || upsertClient(data, clientName, phone);
+    client.name = clientName;
+    client.phone = phone || client.phone || "(11) 99999-9999";
+    client.initials = initialsFromName(clientName);
+    client.color = client.color || "#8e44ad";
+    writeData(data);
+    syncSilently(async () => {
+      const savedClient = client.id ? await updateClientInCloud(client) : await saveClientToCloud(client);
+      if (savedClient?.id) state.selectedClient = savedClient.id;
+    });
+    state.selectedClient = client.id || client.phone;
+    elements.clientForm.reset();
+    openScreen("detailScreen");
+  });
+
+  elements.clientFormCancel.addEventListener("click", () => openScreen("clientsScreen"));
 
   elements.editForm.addEventListener("submit", (event) => {
     event.preventDefault();

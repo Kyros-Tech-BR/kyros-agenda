@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#8e44ad" />
     <title>Studio Bella | App do Salao</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=24" />
-    <link rel="stylesheet" href="/styles.css?v=24" />
+    <link rel="manifest" href="/manifest.webmanifest?v=25" />
+    <link rel="stylesheet" href="/styles.css?v=25" />
   </head>
   <body>
     <div class="phone-shell">
       <header class="topbar">
         <button class="top-icon" type="button" id="backButton" aria-label="Voltar">&lt;</button>
-        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v24</small></h1>
+        <h1><img id="topLogo" alt="" hidden /><span id="screenTitle">Agenda</span> <small>v25</small></h1>
         <button class="top-icon" type="button" id="topAction" aria-label="Adicionar">+</button>
       </header>
 
@@ -114,6 +114,24 @@
 
         <section class="screen" id="detailScreen" data-title="Detalhe do cliente">
           <div id="clientDetail" class="client-detail"></div>
+        </section>
+
+        <section class="screen" id="clientFormScreen" data-title="Cliente">
+          <form id="clientForm" class="form-card">
+            <input id="clientId" name="clientId" type="hidden" />
+            <label>
+              Nome
+              <input id="clientFormName" name="clientName" autocomplete="name" placeholder="Nome do cliente" required />
+            </label>
+            <label>
+              Telefone
+              <input id="clientFormPhone" name="clientPhone" autocomplete="tel" inputmode="tel" placeholder="38999999999" />
+            </label>
+            <div class="form-actions">
+              <button class="secondary-button" type="button" id="clientFormCancel">Cancelar</button>
+              <button class="primary-button" type="submit">Salvar</button>
+            </div>
+          </form>
         </section>
 
         <section class="screen" id="editScreen" data-title="Editar agendamento">
@@ -247,7 +265,7 @@
       </button>
     </template>
 
-    <script src="/config.js?v=24"></script>
-    <script src="/app.js?v=24" type="module"></script>
+    <script src="/config.js?v=25"></script>
+    <script src="/app.js?v=25" type="module"></script>
   </body>
 </html>
